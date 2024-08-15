@@ -718,7 +718,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rays"
+name = "raytracing"
 version = "0.1.0"
 dependencies = [
  "image",
