@@ -152,9 +152,9 @@ impl Geometry {
                     None
                 } else {
                     let mut t = h - discrim.sqrt();
-                    if t < 0.0 || t >= max_t {
+                    if t < 0.0001 || t >= max_t {
                         t = h + discrim.sqrt();
-                        if t < 0.0 || t >= max_t {
+                        if t < 0.0001 || t >= max_t {
                             return None;
                         }
                     }
@@ -170,7 +170,7 @@ impl Geometry {
 
                 let t = (y - ray.origin.1) / ray.direction.1;
                 
-                if t < 0.0 || t >= max_t {
+                if t < 0.0001 || t >= max_t {
                     None
                 } else {
                     let position = ray.at(t);
