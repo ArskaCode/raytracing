@@ -1,9 +1,11 @@
-use image::{Rgb32FImage, RgbImage, Rgb, ImageBuffer, buffer::ConvertBuffer};
+use image::{Rgb32FImage, RgbImage, Rgb, ImageBuffer, buffer::ConvertBuffer, Pixel};
+use rand::Rng;
 use std::ops;
 
 #[derive(Copy, Clone, Debug)]
 struct Vec3(f64, f64, f64);
 
+#[derive(Debug)]
 struct Ray {
     origin: Vec3,
     direction: Vec3,
@@ -20,6 +22,24 @@ enum Geometry {
 }
 
 impl Vec3 {
+    fn random(min: f64, max: f64) -> Vec3 {
+        let mut rand = rand::thread_rng();
+        Vec3(
+            rand.gen_range(min..=max),
+            rand.gen_range(min..=max),
+            rand.gen_range(min..=max),
+        )
+    }
+
+    fn random_unit() -> Self {
+        loop {
+            let vec = Self::random(-1.0, 1.0);
+            if vec.sqr() <= 1.0 {
+                return vec.unit();
+            }
+        }
+    }
+
     fn cross(self, other: Vec3) -> Vec3 {
         Vec3(
             self.1 * other.2 - self.2 * other.1,
@@ -122,19 +142,19 @@ impl Geometry {
     fn hit(&self, ray: &Ray, max_t: f64) -> Option<HitResult> {
         match self {
             Geometry::Sphere { center, radius } => {
-                let oc = ray.origin - *center;
+                let oc = *center - ray.origin;
                 let h = ray.direction.dot(oc);
                 let c = oc.sqr() - radius*radius;
-
+                
                 let discrim = h*h - c;
-
+                
                 if discrim < 0.0 {
                     None
                 } else {
                     let mut t = h - discrim.sqrt();
-                    if t > max_t {
+                    if t < 0.0 || t >= max_t {
                         t = h + discrim.sqrt();
-                        if t > max_t {
+                        if t < 0.0 || t >= max_t {
                             return None;
                         }
                     }
@@ -150,7 +170,7 @@ impl Geometry {
 
                 let t = (y - ray.origin.1) / ray.direction.1;
                 
-                if t < 0.0 || t > max_t {
+                if t < 0.0 || t >= max_t {
                     None
                 } else {
                     let position = ray.at(t);
@@ -163,23 +183,24 @@ impl Geometry {
 }
 const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 1024;
+const PIXEL_SUBDIVISIONS: usize = 3;
 
-fn get_normal_color(normal: Vec3) -> Rgb<f32> {
-    let color_normal = normal / 2.0;
-    Rgb([color_normal.0 as f32 + 0.5, color_normal.1 as f32 + 0.5, color_normal.2 as f32 + 0.5])
-}
+fn get_color(ray: Ray, depth: u32) -> image::Rgb<f32> {
+    if depth == 0 {
+        return Rgb([0.0, 0.0, 0.0])
+    }
 
-fn get_color(ray: Ray) -> image::Rgb<f32> {
     let sphere = Geometry::Sphere {
-        center: Vec3(0.0, 0.0, -5.0),
+        center: Vec3(0.0, -0.0, -5.0),
         radius: 1.0,
     };
 
-    let plane = Geometry::Plane {
-        y: -1.0,
+    let sphere2 = Geometry::Sphere {
+        center: Vec3(0.0, -101.0, -5.0),
+        radius: 100.0
     };
 
-    let world = [plane, sphere];
+    let world = [sphere, sphere2];
 
     let mut max_t = f64::INFINITY;
     let mut result = None;
@@ -191,9 +212,18 @@ fn get_color(ray: Ray) -> image::Rgb<f32> {
     }
 
     if let Some(result) = result {
-        get_normal_color(result.normal)
+        let random = {
+            let unit = Vec3::random_unit();
+            if unit.dot(result.normal) > 0.0 {
+                unit
+            } else {
+                -unit
+            }
+        };
+        //return get_normal_color(result.normal);
+        return get_color(Ray { origin: result.position, direction: random}, depth-1).map(|ch| 0.5*ch);
     } else {
-        Rgb([0.0, 0.0, 0.0])
+        Rgb([0.9, 0.9, 0.9])
     }
 }
 
@@ -216,15 +246,27 @@ fn main() {
     
     for x in 0..WIDTH {
         for y in 0..HEIGHT {
-            let direction = left_upper
-                + camera_right * viewport_width * (x as f64 + 0.5) / WIDTH as f64
-                - camera_up * viewport_height * (y as f64 + 0.5) / HEIGHT as f64;
+            let mut avg_color = [0.0, 0.0, 0.0];
+            for sub_x in 0..PIXEL_SUBDIVISIONS {
+                for sub_y in 0..PIXEL_SUBDIVISIONS {
+                    let x_offset = (sub_x as f64 + 0.5) / PIXEL_SUBDIVISIONS as f64;
+                    let y_offset = (sub_y as f64 + 0.5) / PIXEL_SUBDIVISIONS as f64;
+                    let direction = left_upper
+                        + camera_right * viewport_width * (x as f64 + x_offset) / WIDTH as f64
+                        - camera_up * viewport_height * (y as f64 + y_offset) / HEIGHT as f64;
 
-            let ray = Ray {
-                origin: camera_location,
-                direction: direction.unit(),
-            };
-            buffer.put_pixel(x, y, get_color(ray));
+                    let ray = Ray {
+                        origin: camera_location,
+                        direction: direction.unit(),
+                    };
+                    let color = get_color(ray, 20);
+                    for i in 0..avg_color.len() {
+                        avg_color[i] += color.0[i] / (PIXEL_SUBDIVISIONS*PIXEL_SUBDIVISIONS) as f32
+                    }
+                }
+            }
+            buffer.put_pixel(x, y, Rgb(avg_color));
+            
         }
     }
 
