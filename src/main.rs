@@ -1,6 +1,6 @@
 use image::{Rgb32FImage, RgbImage, Rgb, ImageBuffer, buffer::ConvertBuffer, Pixel};
 use rand::Rng;
-use std::ops;
+use std::{ops, io::{self, Write}};
 
 #[derive(Copy, Clone, Debug)]
 struct Vec3(f64, f64, f64);
@@ -183,7 +183,7 @@ impl Geometry {
 }
 const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 1024;
-const PIXEL_SUBDIVISIONS: usize = 3;
+const PIXEL_SUBDIVISIONS: usize = 50;
 
 fn get_color(ray: Ray, depth: u32) -> image::Rgb<f32> {
     if depth == 0 {
@@ -243,7 +243,10 @@ fn main() {
         camera_direction*focal_length
         - camera_right*(viewport_width/2.0)
         + camera_up*(viewport_height/2.0);
-    
+
+    let step = WIDTH*HEIGHT/100;
+    let mut counter = 0;
+
     for x in 0..WIDTH {
         for y in 0..HEIGHT {
             let mut avg_color = [0.0, 0.0, 0.0];
@@ -266,7 +269,12 @@ fn main() {
                 }
             }
             buffer.put_pixel(x, y, Rgb(avg_color));
-            
+            counter += 1;
+            if counter > step {
+                print!(".");
+                io::stdout().flush().unwrap();
+                counter = 0;
+            }
         }
     }
 
