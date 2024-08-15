@@ -106,13 +106,20 @@ impl ops::Div<f64> for Vec3 {
     }
 }
 
+impl Ray {
+    fn at(&self, t: f64) -> Vec3 {
+        self.origin + self.direction*t
+    }
+}
+
 struct HitResult {
     position: Vec3,
     normal: Vec3,
+    t: f64,
 }
 
 impl Geometry {
-    fn hit(&self, ray: &Ray) -> Option<HitResult> {
+    fn hit(&self, ray: &Ray, max_t: f64) -> Option<HitResult> {
         match self {
             Geometry::Sphere { center, radius } => {
                 let oc = ray.origin - *center;
@@ -124,10 +131,16 @@ impl Geometry {
                 if discrim < 0.0 {
                     None
                 } else {
-                    let t = h - discrim.sqrt();
-                    let position = ray.direction*t + ray.origin;
+                    let mut t = h - discrim.sqrt();
+                    if t > max_t {
+                        t = h + discrim.sqrt();
+                        if t > max_t {
+                            return None;
+                        }
+                    }
+                    let position = ray.at(t);
                     let normal = (position - *center) / *radius;
-                    Some(HitResult { position, normal })
+                    Some(HitResult { position, normal, t })
                }
             }
             Geometry::Plane { y } => {
@@ -137,12 +150,12 @@ impl Geometry {
 
                 let t = (y - ray.origin.1) / ray.direction.1;
                 
-                if t < 0.0 {
+                if t < 0.0 || t > max_t {
                     None
                 } else {
-                    let position = ray.direction*t + ray.origin;
+                    let position = ray.at(t);
                     let normal = Vec3(0.0, 1.0, 0.0);
-                    Some(HitResult { position, normal })
+                    Some(HitResult { position, normal, t })
                 }
             }
         }
@@ -166,14 +179,21 @@ fn get_color(ray: Ray) -> image::Rgb<f32> {
         y: -1.0,
     };
 
-    if let Some(result) = sphere.hit(&ray) {
+    let world = [plane, sphere];
+
+    let mut max_t = f64::INFINITY;
+    let mut result = None;
+   
+    for obj in world {
+        let hit = obj.hit(&ray, max_t);
+        hit.as_ref().inspect(|res| max_t = res.t);
+        result = hit.or(result);
+    }
+
+    if let Some(result) = result {
         get_normal_color(result.normal)
     } else {
-        if let Some(result) = plane.hit(&ray) {
-            get_normal_color(result.normal)
-        } else {
-            Rgb([0.0, 0.0, 0.0])
-        }
+        Rgb([0.0, 0.0, 0.0])
     }
 }
 
