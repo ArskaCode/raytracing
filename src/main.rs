@@ -1,6 +1,7 @@
 use image::{Rgb32FImage, RgbImage, Rgb, ImageBuffer, buffer::ConvertBuffer, Pixel};
 use rand::Rng;
 use std::{ops, io::{self, Write}};
+use rayon::iter::ParallelIterator;
 
 #[derive(Copy, Clone, Debug)]
 struct Vec3(f64, f64, f64);
@@ -183,7 +184,7 @@ impl Geometry {
 }
 const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 1024;
-const PIXEL_SUBDIVISIONS: usize = 50;
+const PIXEL_SUBDIVISIONS: usize = 10;
 
 fn get_color(ray: Ray, depth: u32) -> image::Rgb<f32> {
     if depth == 0 {
@@ -244,39 +245,28 @@ fn main() {
         - camera_right*(viewport_width/2.0)
         + camera_up*(viewport_height/2.0);
 
-    let step = WIDTH*HEIGHT/100;
-    let mut counter = 0;
+    buffer.par_enumerate_pixels_mut().for_each(|(x, y, pixel)| {
+        let mut avg_color = [0.0, 0.0, 0.0];
+        for sub_x in 0..PIXEL_SUBDIVISIONS {
+            for sub_y in 0..PIXEL_SUBDIVISIONS {
+                let x_offset = (sub_x as f64 + 0.5) / PIXEL_SUBDIVISIONS as f64;
+                let y_offset = (sub_y as f64 + 0.5) / PIXEL_SUBDIVISIONS as f64;
+                let direction = left_upper
+                    + camera_right * viewport_width * (x as f64 + x_offset) / WIDTH as f64
+                    - camera_up * viewport_height * (y as f64 + y_offset) / HEIGHT as f64;
 
-    for x in 0..WIDTH {
-        for y in 0..HEIGHT {
-            let mut avg_color = [0.0, 0.0, 0.0];
-            for sub_x in 0..PIXEL_SUBDIVISIONS {
-                for sub_y in 0..PIXEL_SUBDIVISIONS {
-                    let x_offset = (sub_x as f64 + 0.5) / PIXEL_SUBDIVISIONS as f64;
-                    let y_offset = (sub_y as f64 + 0.5) / PIXEL_SUBDIVISIONS as f64;
-                    let direction = left_upper
-                        + camera_right * viewport_width * (x as f64 + x_offset) / WIDTH as f64
-                        - camera_up * viewport_height * (y as f64 + y_offset) / HEIGHT as f64;
-
-                    let ray = Ray {
-                        origin: camera_location,
-                        direction: direction.unit(),
-                    };
-                    let color = get_color(ray, 20);
-                    for i in 0..avg_color.len() {
-                        avg_color[i] += color.0[i] / (PIXEL_SUBDIVISIONS*PIXEL_SUBDIVISIONS) as f32
-                    }
+                let ray = Ray {
+                    origin: camera_location,
+                    direction: direction.unit(),
+                };
+                let color = get_color(ray, 20);
+                for i in 0..avg_color.len() {
+                    avg_color[i] += color.0[i] / (PIXEL_SUBDIVISIONS*PIXEL_SUBDIVISIONS) as f32
                 }
             }
-            buffer.put_pixel(x, y, Rgb(avg_color));
-            counter += 1;
-            if counter > step {
-                print!(".");
-                io::stdout().flush().unwrap();
-                counter = 0;
-            }
         }
-    }
+        *pixel = Rgb(avg_color);
+    });
 
     let converted: RgbImage = buffer.convert();
 
