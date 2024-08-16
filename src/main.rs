@@ -219,7 +219,8 @@ fn get_color(ray: Ray, depth: u32) -> image::Rgb<f32> {
     if let Some(result) = result {
         // lambertian reflection
         let scatter_vec = (result.normal + Vec3::random_unit()).unit();
-        return get_color(Ray { origin: result.position, direction: scatter_vec}, depth-1).map(|ch| 0.5*ch);
+        let scatter_ray = Ray { origin: result.position, direction: scatter_vec };
+        return get_color(scatter_ray, depth-1).map(|ch| 0.1*ch);
     } else {
         Rgb([0.9, 0.9, 0.9])
     }
@@ -262,7 +263,7 @@ fn main() {
                 }
             }
         }
-        *pixel = Rgb(avg_color);
+        *pixel = Rgb(avg_color).map(f32::sqrt);
     });
 
     let converted: RgbImage = buffer.convert();
