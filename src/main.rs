@@ -22,6 +22,17 @@ enum Geometry {
     },
 }
 
+struct HitResult {
+    position: Vec3,
+    normal: Vec3,
+    t: f64,
+}
+
+struct Material {
+    albedo: Vec3,
+    metalness: f64,
+}
+
 impl Vec3 {
     fn random(min: f64, max: f64) -> Vec3 {
         let mut rand = rand::thread_rng();
@@ -49,6 +60,14 @@ impl Vec3 {
         )
     }
 
+    fn elem_product(self, other: Vec3) -> Vec3 {
+        Vec3(
+            self.0 * other.0,
+            self.1 * other.1,
+            self.2 * other.2,
+        )
+    }
+
     fn dot(self, other: Vec3) -> f64 {
         self.0 * other.0 + self.1 * other.1 + self.2 * other.2
     }
@@ -63,6 +82,10 @@ impl Vec3 {
 
     fn unit(self) -> Self {
         self / self.mag()
+    }
+
+    fn into_color(self) -> Rgb<f32> {
+        Rgb([self.0 as f32, self.1 as f32, self.2 as f32])
     }
 }
 
@@ -133,12 +156,6 @@ impl Ray {
     }
 }
 
-struct HitResult {
-    position: Vec3,
-    normal: Vec3,
-    t: f64,
-}
-
 impl Geometry {
     fn hit(&self, ray: &Ray, max_t: f64) -> Option<HitResult> {
         match self {
@@ -182,47 +199,77 @@ impl Geometry {
         }
     }
 }
+
+fn reflect(vec: Vec3, normal: Vec3) -> Vec3 {
+    vec - normal*2.0*vec.dot(normal)
+}
+
 const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 1024;
 const PIXEL_SUBDIVISIONS: usize = 10;
 
-fn get_color(ray: Ray, depth: u32) -> image::Rgb<f32> {
+fn get_color(ray: Ray, depth: u32) -> Vec3 {
     if depth == 0 {
-        return Rgb([0.0, 0.0, 0.0])
+        return Vec3(0.0, 0.0, 0.0);
     }
 
     let sphere = Geometry::Sphere {
-        center: Vec3(0.0, -0.0, -5.0),
+        center: Vec3(1.2, 0.0, -5.0),
         radius: 1.0,
     };
 
-    let _sphere2 = Geometry::Sphere {
+    let sphere2 = Geometry::Sphere {
         center: Vec3(0.0, -101.0, -5.0),
         radius: 100.0
     };
 
-    let plane = Geometry::Plane {
+    let sphere3 = Geometry::Sphere {
+        center: Vec3(-1.2, 0.0, -5.0),
+        radius: 1.0
+    };
+
+    let sphere_material = Material {
+        albedo: Vec3(0.9, 0.9, 0.9),
+        metalness: 1.0,
+    };
+
+    let sphere2_material = Material {
+        albedo: Vec3(0.5, 0.5, 0.5),
+        metalness: 0.0,
+    };
+
+    let sphere3_material = Material {
+        albedo: Vec3(0.9, 0.0, 0.0),
+        metalness: 0.0,
+    };
+
+    let _plane = Geometry::Plane {
         y: -1.0,
     };
 
-    let world = [sphere, plane];
+    let world = [(sphere, sphere_material), (sphere2, sphere2_material), (sphere3, sphere3_material)];
 
     let mut max_t = f64::INFINITY;
     let mut result = None;
    
-    for obj in world {
+    for (obj, mat) in world {
         let hit = obj.hit(&ray, max_t);
         hit.as_ref().inspect(|res| max_t = res.t);
-        result = hit.or(result);
+        result = hit.map(|res| (res, mat)).or(result);
     }
+     
+    if let Some((result, mat)) = result {
+        let p = rand::thread_rng().gen_range(0.0..=1.0);
+        let scatter_vec = if p > mat.metalness {
+            (result.normal + Vec3::random_unit()).unit()
+        } else {
+            reflect(ray.direction, result.normal)
+        };
 
-    if let Some(result) = result {
-        // lambertian reflection
-        let scatter_vec = (result.normal + Vec3::random_unit()).unit();
         let scatter_ray = Ray { origin: result.position, direction: scatter_vec };
-        return get_color(scatter_ray, depth-1).map(|ch| 0.1*ch);
+        return get_color(scatter_ray, depth-1).elem_product(mat.albedo);
     } else {
-        Rgb([0.9, 0.9, 0.9])
+        Vec3(0.9, 0.9, 0.9)
     }
 }
 
@@ -244,7 +291,7 @@ fn main() {
         + camera_up*(viewport_height/2.0);
 
     buffer.par_enumerate_pixels_mut().for_each(|(x, y, pixel)| {
-        let mut avg_color = [0.0, 0.0, 0.0];
+        let mut avg_color = Vec3(0.0, 0.0, 0.0);
         for sub_x in 0..PIXEL_SUBDIVISIONS {
             for sub_y in 0..PIXEL_SUBDIVISIONS {
                 let x_offset = (sub_x as f64 + 0.5) / PIXEL_SUBDIVISIONS as f64;
@@ -258,12 +305,10 @@ fn main() {
                     direction: direction.unit(),
                 };
                 let color = get_color(ray, 20);
-                for i in 0..avg_color.len() {
-                    avg_color[i] += color.0[i] / (PIXEL_SUBDIVISIONS*PIXEL_SUBDIVISIONS) as f32
-                }
+                avg_color = avg_color + color / (PIXEL_SUBDIVISIONS*PIXEL_SUBDIVISIONS) as f64;
             }
         }
-        *pixel = Rgb(avg_color).map(f32::sqrt);
+        *pixel = avg_color.into_color().map(f32::sqrt);
     });
 
     let converted: RgbImage = buffer.convert();
