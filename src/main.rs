@@ -206,7 +206,7 @@ fn reflect(vec: Vec3, normal: Vec3) -> Vec3 {
 
 const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 1024;
-const PIXEL_SUBDIVISIONS: usize = 10;
+const PIXEL_SUBDIVISIONS: usize = 20;
 
 fn get_color(ray: Ray, depth: u32) -> Vec3 {
     if depth == 0 {
@@ -228,6 +228,10 @@ fn get_color(ray: Ray, depth: u32) -> Vec3 {
         radius: 1.0
     };
 
+    let _plane = Geometry::Plane {
+        y: -1.0,
+    };
+
     let sphere_material = Material {
         albedo: Vec3(0.9, 0.9, 0.9),
         metalness: 1.0,
@@ -243,10 +247,11 @@ fn get_color(ray: Ray, depth: u32) -> Vec3 {
         metalness: 0.0,
     };
 
-    let _plane = Geometry::Plane {
-        y: -1.0,
+    let _plane_material = Material {
+        albedo: Vec3(0.9, 0.9, 0.9),
+        metalness: 1.0,
     };
-
+    
     let world = [(sphere, sphere_material), (sphere2, sphere2_material), (sphere3, sphere3_material)];
 
     let mut max_t = f64::INFINITY;
@@ -260,9 +265,12 @@ fn get_color(ray: Ray, depth: u32) -> Vec3 {
      
     if let Some((result, mat)) = result {
         let p = rand::thread_rng().gen_range(0.0..=1.0);
+        // Metalness represents the probability for the ray to reflect
         let scatter_vec = if p > mat.metalness {
+            // Lambertian scattering
             (result.normal + Vec3::random_unit()).unit()
         } else {
+            // Reflection
             reflect(ray.direction, result.normal)
         };
 
@@ -304,7 +312,7 @@ fn main() {
                     origin: camera_location,
                     direction: direction.unit(),
                 };
-                let color = get_color(ray, 20);
+                let color = get_color(ray, 40);
                 avg_color = avg_color + color / (PIXEL_SUBDIVISIONS*PIXEL_SUBDIVISIONS) as f64;
             }
         }
