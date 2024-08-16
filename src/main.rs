@@ -1,6 +1,6 @@
 use image::{Rgb32FImage, RgbImage, Rgb, ImageBuffer, buffer::ConvertBuffer, Pixel};
 use rand::Rng;
-use std::{ops, io::{self, Write}};
+use std::ops;
 use rayon::iter::ParallelIterator;
 
 #[derive(Copy, Clone, Debug)]
@@ -196,12 +196,16 @@ fn get_color(ray: Ray, depth: u32) -> image::Rgb<f32> {
         radius: 1.0,
     };
 
-    let sphere2 = Geometry::Sphere {
+    let _sphere2 = Geometry::Sphere {
         center: Vec3(0.0, -101.0, -5.0),
         radius: 100.0
     };
 
-    let world = [sphere, sphere2];
+    let plane = Geometry::Plane {
+        y: -1.0,
+    };
+
+    let world = [sphere, plane];
 
     let mut max_t = f64::INFINITY;
     let mut result = None;
@@ -213,16 +217,9 @@ fn get_color(ray: Ray, depth: u32) -> image::Rgb<f32> {
     }
 
     if let Some(result) = result {
-        let random = {
-            let unit = Vec3::random_unit();
-            if unit.dot(result.normal) > 0.0 {
-                unit
-            } else {
-                -unit
-            }
-        };
-        //return get_normal_color(result.normal);
-        return get_color(Ray { origin: result.position, direction: random}, depth-1).map(|ch| 0.5*ch);
+        // lambertian reflection
+        let scatter_vec = (result.normal + Vec3::random_unit()).unit();
+        return get_color(Ray { origin: result.position, direction: scatter_vec}, depth-1).map(|ch| 0.5*ch);
     } else {
         Rgb([0.9, 0.9, 0.9])
     }
