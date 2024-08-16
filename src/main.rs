@@ -228,6 +228,11 @@ fn get_color(ray: Ray, depth: u32) -> Vec3 {
         radius: 1.0
     };
 
+    let sphere4 = Geometry::Sphere {
+        center: Vec3(0.0, 1.8, -5.0),
+        radius: 1.0
+    };
+
     let _plane = Geometry::Plane {
         y: -1.0,
     };
@@ -247,12 +252,17 @@ fn get_color(ray: Ray, depth: u32) -> Vec3 {
         metalness: 0.0,
     };
 
+    let sphere4_material = Material {
+        albedo: Vec3(0.8, 0.8, 0.0),
+        metalness: 0.5,
+    };
+
     let _plane_material = Material {
         albedo: Vec3(0.9, 0.9, 0.9),
         metalness: 1.0,
     };
     
-    let world = [(sphere, sphere_material), (sphere2, sphere2_material), (sphere3, sphere3_material)];
+    let world = [(sphere, sphere_material), (sphere2, sphere2_material), (sphere3, sphere3_material), (sphere4, sphere4_material)];
 
     let mut max_t = f64::INFINITY;
     let mut result = None;
@@ -288,7 +298,7 @@ fn main() {
     let viewport_height = 1.0;
     let focal_length = 1.0;
 
-    let camera_location = Vec3(0.0, 0.0, 0.0);
+    let camera_location = Vec3(0.0, 1.0, 0.0);
     let camera_direction = Vec3(0.0, 0.0, -1.0);
     let camera_up = Vec3(0.0, 1.0, 0.0);
     let camera_right = camera_direction.cross(camera_up);
